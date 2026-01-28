@@ -44,14 +44,9 @@ contract AuctionTest is Test {
 
     function setUp() public {
         config = new HelperConfig();
-        auction = config.run();
+        (auction, nft, tokenId) = config.run();
 
         seller = auction.getSeller();
-        nft = new MockERC721();
-        tokenId = nft.mint(seller);
-
-        vm.prank(seller);
-        nft.approve(address(auction), tokenId);
 
         vm.deal(bob, INITAL_BALANCE);
         vm.deal(alice, INITAL_BALANCE);
