@@ -26,8 +26,9 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     /// ENUMS ///
     /////////////
     enum Status {
-        START,
-        END
+        NOT_STARTED, // 0
+        START, // 1
+        END // 2
     }
 
     ///////////////
@@ -53,9 +54,9 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     uint256 private immutable i_duration;
     uint256 private immutable i_reservePrice;
 
-    AuctionInformation private auction;
+    AuctionInformation private s_auction;
 
-    mapping(address => uint256) private pendingReturns;
+    mapping(address => uint256) private s_pendingReturns;
 
     event AuctionStart(address indexed seller, uint256 indexed tokenId);
     event BidPlaced(address indexed bidder, uint256 indexed amount);
@@ -92,7 +93,7 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
             revert Auction__TokenIdCanNotBeZero();
         }
 
-        if(auction.status == Status.START && block.timestamp < auction.endAt) {
+        if (s_auction.status == Status.START && block.timestamp < s_auction.endAt) {
             revert Auction__AuctionAlreadyStarted();
         }
 
@@ -104,7 +105,7 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
         WorkOfArt memory workOfArt = WorkOfArt({nft: nft, tokenId: _tokenId});
 
         // build auctionInformation struct
-        auction = AuctionInformation({
+        s_auction = AuctionInformation({
             status: Status.START,
             endAt: block.timestamp + i_duration,
             highestBid: 0,
@@ -116,35 +117,35 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     }
 
     function bid() public payable {
-        if (auction.status != Status.START) {
+        if (s_auction.status != Status.START) {
             revert Auction__AuctionNotStarted();
         }
 
-        if (msg.value <= auction.highestBid) {
+        if (msg.value <= s_auction.highestBid) {
             revert Auction__BidNeedBeHigherThanCurrentHighestBid();
         }
 
-        if (block.timestamp >= auction.endAt) {
+        if (block.timestamp >= s_auction.endAt) {
             revert Auction__AuctionTimeEnded();
         }
 
-        if (auction.highestBidder != address(0)) {
-            pendingReturns[auction.highestBidder] += auction.highestBid;
+        if (s_auction.highestBidder != address(0)) {
+            s_pendingReturns[s_auction.highestBidder] += s_auction.highestBid;
         }
 
-        auction.highestBidder = msg.sender;
-        auction.highestBid = msg.value;
+        s_auction.highestBidder = msg.sender;
+        s_auction.highestBid = msg.value;
 
         emit BidPlaced(msg.sender, msg.value);
     }
 
     function withdraw() external nonReentrant {
-        if (pendingReturns[msg.sender] == 0) {
+        if (s_pendingReturns[msg.sender] == 0) {
             revert Auction__NothingToWithdraw();
         }
 
-        uint256 currentAmount = pendingReturns[msg.sender];
-        pendingReturns[msg.sender] = 0;
+        uint256 currentAmount = s_pendingReturns[msg.sender];
+        s_pendingReturns[msg.sender] = 0;
 
         (bool success,) = payable(msg.sender).call{value: currentAmount}("");
         if (!success) {
@@ -155,23 +156,23 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     }
 
     function end() external onlySeller nonReentrant {
-        if (auction.status != Status.START) {
+        if (s_auction.status != Status.START) {
             revert Auction__AuctionNotStarted();
         }
 
-        if (block.timestamp < auction.endAt) {
+        if (block.timestamp < s_auction.endAt) {
             revert Auction__TimeDoNotEndYet();
         }
 
-        auction.status = Status.END;
+        s_auction.status = Status.END;
 
-        uint256 highestBid = auction.highestBid;
-        address highestBidder = auction.highestBidder;
+        uint256 highestBid = s_auction.highestBid;
+        address highestBidder = s_auction.highestBidder;
 
-        auction.highestBid = 0;
-        auction.highestBidder = address(0);
+        s_auction.highestBid = 0;
+        s_auction.highestBidder = address(0);
 
-        WorkOfArt memory workOfArt = auction.workOfArt;
+        WorkOfArt memory workOfArt = s_auction.workOfArt;
 
         if (highestBid >= i_reservePrice) {
             // transfer nft to winner
@@ -185,8 +186,8 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
         } else {
             workOfArt.nft.safeTransferFrom(address(this), i_seller, workOfArt.tokenId);
 
-            if(highestBidder != address(0)) {
-                pendingReturns[highestBidder] += highestBid;
+            if (highestBidder != address(0)) {
+                s_pendingReturns[highestBidder] += highestBid;
             }
         }
 
@@ -235,6 +236,17 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     }
 
     function getPendingReturnsByUser(address _user) external view returns (uint256) {
-        return pendingReturns[_user];
+        return s_pendingReturns[_user];
+    }
+
+    function getAuction() public view returns (AuctionInformation memory) {
+        return s_auction;
+    }
+
+    function getAuctionStatus() public view returns (uint256) {
+        // 0 -> NotStarted
+        // 1 -> Start
+        // 2 -> End
+        return uint256(s_auction.status);
     }
 }

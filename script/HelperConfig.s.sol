@@ -6,7 +6,6 @@ import {Script} from "forge-std/Script.sol";
 import {Auction} from "src/Auction.sol";
 
 contract HelperConfig is Script {
-
     uint256 public constant DURATION = 1 days;
     uint256 public constant RESERVE_PRICE = 1 ether;
 
@@ -20,5 +19,4 @@ contract HelperConfig is Script {
         vm.stopBroadcast();
         return auction;
     }
-
 }
