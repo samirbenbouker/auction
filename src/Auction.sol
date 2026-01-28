@@ -10,16 +10,17 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
     //////////////
     /// ERRORS ///
     //////////////
-    error Auction__YouAreNotSeller();
     error Auction__NftAddressCanNotBeZero();
     error Auction__TokenIdCanNotBeZero();
     error Auction__AuctionNotStarted();
+    error Auction__WithdrawFailed();
+    error Auction__TransferToSellerFailed();
+    error Auction__YouAreNotSeller();
+    error Auction__TimeDoNotEndYet();
+    error Auction__AuctionTimeEnded();
+    error Auction__AuctionAlreadyStarted();
     error Auction__BidNeedBeHigherThanCurrentHighestBid();
     error Auction__NothingToWithdraw();
-    error Auction__WithdrawFailed();
-    error Auction__TimeDoNotEndYet();
-    error Auction__TransferToSellerFailed();
-    error Auction__AuctionTimeEnded();
 
     /////////////
     /// ENUMS ///
@@ -85,6 +86,10 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
 
         if (_tokenId == 0) {
             revert Auction__TokenIdCanNotBeZero();
+        }
+
+        if(auction.status == Status.START && block.timestamp < auction.endAt) {
+            revert Auction__AuctionAlreadyStarted();
         }
 
         // transfer NFT to contract
@@ -166,7 +171,7 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
 
         if (highestBid >= i_reservePrice) {
             // transfer nft to winner
-            workOfArt.nft.transferFrom(address(this), highestBidder, workOfArt.tokenId);
+            workOfArt.nft.safeTransferFrom(address(this), highestBidder, workOfArt.tokenId);
 
             // send amount to seller
             (bool success,) = payable(msg.sender).call{value: highestBid}("");
@@ -174,9 +179,11 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
                 revert Auction__TransferToSellerFailed();
             }
         } else {
-            workOfArt.nft.transferFrom(address(this), i_seller, workOfArt.tokenId);
+            workOfArt.nft.safeTransferFrom(address(this), i_seller, workOfArt.tokenId);
 
-            pendingReturns[highestBidder] += highestBid;
+            if(highestBidder != address(0)) {
+                pendingReturns[highestBidder] += highestBid;
+            }
         }
 
         emit AuctionEnded(highestBidder, workOfArt.tokenId);
