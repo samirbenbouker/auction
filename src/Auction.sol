@@ -115,7 +115,7 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
         emit AuctionStart(msg.sender, _tokenId);
     }
 
-    function bid() external payable {
+    function bid() public payable {
         if (auction.status != Status.START) {
             revert Auction__AuctionNotStarted();
         }
