@@ -9,7 +9,7 @@ import {MockERC721} from "test/mock/MockERC721.sol";
 contract AuctionHandler is Test {
     Auction public auction;
     MockERC721 public nft;
-    
+
     address public seller;
     uint256 public tokenId;
 
@@ -28,7 +28,7 @@ contract AuctionHandler is Test {
         bidders.push(makeAddr("deve"));
         bidders.push(makeAddr("erin"));
 
-        for(uint256 i = 0; i < bidders.length; i++) {
+        for (uint256 i = 0; i < bidders.length; i++) {
             vm.deal(bidders[i], INITIAL_BALANCE);
         }
     }
@@ -56,7 +56,7 @@ contract AuctionHandler is Test {
     function withdraw(uint256 bidderSeed) external {
         address bidder = _pickBidder(bidderSeed);
         vm.prank(bidder);
-        try auction.withdraw() {} catch{}
+        try auction.withdraw() {} catch {}
     }
 
     function warp(uint256 rawSeconds) external {
@@ -70,5 +70,4 @@ contract AuctionHandler is Test {
         vm.prank(caller);
         try auction.end() {} catch {}
     }
-
 }

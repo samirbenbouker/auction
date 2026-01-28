@@ -29,9 +29,9 @@ contract AuctionInvariantTest is StdInvariant, Test {
         seller = makeAddr("seller");
 
         vm.startPrank(seller);
-        
+
         auction = new Auction(DURATION, RESERVE_PRICE);
-        
+
         nft = new MockERC721();
         tokenId = nft.mint(seller);
 
@@ -44,7 +44,7 @@ contract AuctionInvariantTest is StdInvariant, Test {
     function invariant__ifStarted_nftIsInEscrow() external view {
         uint256 status = auction.getAuctionStatus();
 
-        if(status == STATUS_START) {
+        if (status == STATUS_START) {
             address owner = nft.ownerOf(tokenId);
             assertEq(owner, address(auction));
         }
@@ -53,7 +53,7 @@ contract AuctionInvariantTest is StdInvariant, Test {
     function invariant__ifNotStartedOrEnded__contractDoesNotHoldNft() external view {
         uint256 status = auction.getAuctionStatus();
 
-        if(status == STATUS_NOT_STARTED || status == STATUS_END) {
+        if (status == STATUS_NOT_STARTED || status == STATUS_END) {
             // if never start, owner will be seller
             // if never end, owner is seller or winner
             // in both cases auction never will be owner
@@ -66,7 +66,7 @@ contract AuctionInvariantTest is StdInvariant, Test {
         uint256 status = auction.getAuctionStatus();
         Auction.AuctionInformation memory a = auction.getAuction();
 
-        if(status == STATUS_START) {
+        if (status == STATUS_START) {
             assertEq(a.highestBid, ZERO);
             assertEq(a.highestBidder, ADDRESS_ZERO);
         }
@@ -75,7 +75,7 @@ contract AuctionInvariantTest is StdInvariant, Test {
     function invariant__highestBidderZeroMeansHighestBidZero() external view {
         Auction.AuctionInformation memory a = auction.getAuction();
 
-        if(a.highestBidder == ADDRESS_ZERO) {
+        if (a.highestBidder == ADDRESS_ZERO) {
             assertEq(a.highestBid, ZERO);
         }
     }
