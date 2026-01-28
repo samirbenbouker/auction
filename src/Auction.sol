@@ -97,10 +97,8 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
             revert Auction__AuctionAlreadyStarted();
         }
 
-        // transfer NFT to contract
         IERC721 nft = IERC721(_nft);
-        nft.safeTransferFrom(msg.sender, address(this), _tokenId);
-
+        
         // build workOfArt struct
         WorkOfArt memory workOfArt = WorkOfArt({nft: nft, tokenId: _tokenId});
 
@@ -112,6 +110,9 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
             highestBidder: address(0),
             workOfArt: workOfArt
         });
+
+        // transfer NFT to contract
+        nft.safeTransferFrom(msg.sender, address(this), _tokenId);
 
         emit AuctionStart(msg.sender, _tokenId);
     }
