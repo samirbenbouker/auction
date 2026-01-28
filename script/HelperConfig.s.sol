@@ -19,12 +19,12 @@ contract HelperConfig is Script {
 
         Auction auction = new Auction(DURATION, RESERVE_PRICE);
         MockERC721 nft = new MockERC721();
-        
+
         vm.stopBroadcast();
 
         address seller = auction.getSeller();
         uint256 tokenId = nft.mint(seller);
-        
+
         vm.prank(seller);
         nft.approve(address(auction), tokenId);
 
