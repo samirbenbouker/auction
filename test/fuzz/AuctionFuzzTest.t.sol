@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.30;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {Auction} from "src/Auction.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 import {MockERC721} from "test/mock/MockERC721.sol";
