@@ -76,6 +76,10 @@ contract Auction is IERC721Receiver, ReentrancyGuard {
         i_reservePrice = _reservePrice;
     }
 
+    receive() external payable {
+        bid();
+    }
+
     //////////////////////////
     /// EXTERNAL FUNCTIONS ///
     //////////////////////////
