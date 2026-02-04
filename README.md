@@ -1,154 +1,235 @@
-3. Subasta (English o Dutch Auction)
-Contrato de subasta con tiempo límite.
-Practicas:
-* Manejo de tiempo (block.timestamp, vm.warp)
-* Reembolsos seguros
-* Prevención de reentrancy
-Extras:
-* Encuentra y documenta vulnerabilidades
-* Escribe tests que rompan tu propio contrato
+# 🏷️ NFT English Auction — Solidity & Foundry
 
-## 1) English Auction (recomendada)
+This project implements a **secure English auction** for **ERC-721 NFTs** using Solidity and Foundry.
+It includes **unit tests, fuzz tests, invariant tests**, and multiple **security-focused mocks** to validate real-world attack scenarios.
 
-### Objetivo
+The auction supports:
 
-Subastar un NFT (o un “item” abstracto) durante un tiempo. Gana la mayor puja. Los que pierden pueden **withdraw** su dinero (pull payments).
+* Time-bounded bidding
+* Reserve price enforcement
+* Safe refund handling (pull payments)
+* Robust testing against edge cases and malicious actors
 
 ---
 
-## Funciones que debería tener
+## 📦 Features
 
-### A) Setup / estado
+* ✅ **English auction** (highest bid wins)
+* ✅ **Reserve price** support
+* ✅ **NFT escrow** during active auction
+* ✅ **Pull-payment refunds** (`pendingReturns`)
+* ✅ **Reentrancy protection**
+* ✅ Extensive test suite:
 
-* `constructor(address seller, uint256 duration, uint256 reservePrice)`
-  (o que `seller = msg.sender`)
-
-Variables típicas:
-
-* `address public seller`
-* `uint256 public endAt`
-* `uint256 public highestBid`
-* `address public highestBidder`
-* `bool public started`
-* `bool public ended`
-* `mapping(address => uint256) public pendingReturns` (reembolsos)
-
-Opcional (si subastas NFT):
-
-* `IERC721 public nft; uint256 public tokenId;`
+  * Unit tests
+  * Fuzz tests
+  * Invariant (stateful) tests
+* ✅ Security mocks (reverting ETH receiver)
 
 ---
 
-### B) Control del ciclo de vida
+## 🧱 Architecture
 
-1. **start()**
+### Core Contract
 
-* Solo seller
-* Marca `started = true`
-* Define `endAt = block.timestamp + duration`
-* (Si NFT) transfiere el NFT al contrato
+#### `Auction.sol`
 
-2. **bid() payable**
+Main auction contract responsible for:
 
-* Requiere `started` y `block.timestamp < endAt`
-* Requiere `msg.value > highestBid` (y quizá `>= reserve`)
-* Si ya había highestBidder, su bid anterior pasa a `pendingReturns[prevHighest] += prevHighestBid`
-* Actualiza `highestBidder/highestBid`
-* Emite `BidPlaced(bidder, amount)`
+* Auction lifecycle (`start → bid → withdraw → end`)
+* NFT custody and settlement
+* Bid tracking and refunds
 
-3. **withdraw()**
+**Key design decisions**
 
-* Permite a cualquiera retirar su `pendingReturns[msg.sender]`
-* Pone a 0 antes de enviar (CEI)
-* Emite `Withdraw(bidder, amount)`
-
-4. **end()**
-
-* Requiere `started` y `block.timestamp >= endAt`
-* Requiere `!ended`
-* Marca `ended = true`
-* Si `highestBid >= reservePrice`:
-
-  * transfiere el pago al seller (o lo deja claimable)
-  * (si NFT) transfiere NFT al ganador
-* Si no llegó al reserve:
-
-  * (si NFT) devuelve NFT al seller
-  * el highestBidder debe poder retirar su bid (pendingReturns)
-
-Eventos:
-
-* `AuctionStarted(endAt)`
-* `BidPlaced(bidder, amount)`
-* `AuctionEnded(winner, amount)`
-* `Withdraw(bidder, amount)`
+* Uses **custom errors** (gas efficient)
+* Uses **pull payments** to prevent DoS via failed refunds
+* Uses `ReentrancyGuard` on ETH transfers
+* Immutable configuration (seller, duration, reserve price)
 
 ---
 
-## Detalles de seguridad importantes (que deberías implementar)
+### Supporting Contracts
 
-* **Pull over push payments**: no devuelvas ETH directo en `bid()`, acumúlalo en `pendingReturns`.
-* `nonReentrant` en `withdraw()` (y quizá en `end()`)
-* Chequeos de tiempo con `vm.warp` en tests
-* No permitir `bid()` después del final
-* No permitir `end()` antes de tiempo
-* Manejar reserve price correctamente
+#### `MockERC721.sol`
 
----
+Minimal ERC721 mock used for testing:
 
-# 2) Tests que deberías hacer (Foundry)
+* Permissionless minting
+* Sequential token IDs
+* Not intended for production
 
-## A) Tests de “ciclo feliz”
+#### `RejectETH.sol`
 
-1. `start()` por seller funciona y setea `endAt`
-2. Bid 1 (Alice) se convierte en highest
-3. Bid 2 (Bob) mayor reemplaza a Alice
-4. Alice puede `withdraw()` su bid anterior
-5. Pasas el tiempo y `end()`:
+Security mock that **reverts on ETH receive**:
 
-   * gana Bob
-   * seller recibe `highestBid`
-   * (si NFT) Bob recibe NFT
+* Simulates malicious or incompatible receivers
+* Used to test refund failure scenarios
 
 ---
 
-## B) Tests de reverts (muy importantes)
+## 🔁 Auction Flow
 
-6. `start()` por no-seller revierte
-7. `bid()` antes de start revierte
-8. `bid()` con amount <= highestBid revierte
-9. `bid()` después de endAt revierte (`vm.warp`)
-10. `end()` antes de tiempo revierte
-11. `end()` 2 veces revierte
+1. **Start**
 
----
+   * Seller starts auction
+   * NFT transferred to contract (escrow)
+2. **Bid**
 
-## C) Reserve price
+   * Users place bids with ETH
+   * Higher bids replace previous ones
+   * Outbid users receive refundable balance
+3. **Withdraw**
 
-12. Si `highestBid < reserve` al final:
+   * Outbid users withdraw ETH manually
+4. **End**
 
-* no hay winner real
-* seller recupera NFT (si aplica)
-* highestBidder puede retirar su bid (vía `withdraw`)
+   * If `highestBid ≥ reservePrice`:
 
----
+     * NFT → winner
+     * ETH → seller
+   * Else:
 
-## D) Attack tests (nivel auditor)
-
-13. **Reentrancy en withdraw**
-
-* Contrato atacante que recibe ETH y reentra en `withdraw()`
-* Debe fallar por CEI y/o `nonReentrant`
-
-14. **DoS por fallback revert (si hicieras push payments)**
-
-* Esto es un test educativo: demuestra por qué no haces refund directo en `bid()`
-* (Si lo implementas mal, un bidder con fallback que revierte bloquea la subasta)
+     * NFT → seller
+     * Highest bidder can withdraw ETH
 
 ---
 
-## E) Fuzz / invariants (bonus)
+## 🧪 Testing Strategy
 
-15. Fuzz: el highestBid siempre es el máximo de las bids vistas
-16. Invariant: `address(this).balance == highestBid + sum(pendingReturns)`
-    (muy bonita para auditoría)
+### ✅ Unit Tests (`AuctionTest.t.sol`)
+
+Covers:
+
+* All revert paths
+* Successful flows
+* Reserve met vs not met
+* Refund logic
+* Getter correctness
+* ETH transfer failures via `RejectETH`
+
+### 🔀 Fuzz Tests (`AuctionFuzzTest.t.sol`)
+
+Uses randomized inputs to test:
+
+* Unauthorized access
+* Bid edge cases
+* Time-based failures
+* State consistency under random actors
+
+### ♾️ Invariant Tests
+
+Uses **stateful fuzzing** with a handler:
+
+#### `AuctionHandler.t.sol`
+
+Simulates arbitrary sequences of:
+
+* `start`
+* `bid`
+* `withdraw`
+* `warp`
+* `end`
+
+All calls are wrapped in `try/catch` to explore invalid states safely.
+
+#### `AuctionInvariantTest.t.sol`
+
+Ensures properties like:
+
+* NFT escrow correctness
+* No NFT stuck in contract
+* Bid state consistency
+* Post-end state cleanup
+
+---
+
+## 🔐 Security Considerations
+
+* **Pull over push payments** → avoids refund-based DoS
+* **Reentrancy-safe ETH transfers**
+* **Malicious receiver simulation**
+* **Invariant testing** to detect unexpected state corruption
+* Explicit access control (`onlySeller`)
+
+---
+
+## 🛠️ Tech Stack
+
+* **Solidity** `0.8.30`
+* **Foundry**
+
+  * forge
+  * cast
+  * anvil
+* **OpenZeppelin Contracts**
+
+  * ERC721
+  * ReentrancyGuard
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* Foundry installed
+  👉 [https://book.getfoundry.sh/getting-started/installation](https://book.getfoundry.sh/getting-started/installation)
+
+### Install dependencies
+
+```bash
+forge install
+```
+
+### Build
+
+```bash
+forge build
+```
+
+### Run tests
+
+```bash
+forge test -vvvv
+```
+
+### Run invariant tests
+
+```bash
+forge test --match-contract AuctionInvariantTest -vvvv
+```
+
+---
+
+## 📁 Project Structure
+
+```text
+src/
+ └── Auction.sol
+
+script/
+ └── HelperConfig.s.sol
+
+test/
+ ├── unit/
+ │   └── AuctionTest.t.sol
+ ├── fuzz/
+ │   └── AuctionFuzzTest.t.sol
+ ├── invariant/
+ │   ├── AuctionHandler.t.sol
+ │   └── AuctionInvariantTest.t.sol
+ └── mock/
+     ├── MockERC721.sol
+     └── RejectETH.sol
+```
+
+---
+
+## ⚠️ Disclaimer
+
+This project is **for educational and testing purposes**.
+It has **not been audited** and should **not be used in production** without a professional security review.
+
+* hacerlo más **Web3-friendly** para recruiters,
+* o escribir una **sección “Known Limitations / Future Improvements”** para dejarlo aún más pro.
